@@ -1,0 +1,154 @@
+import React, { useState, useEffect } from 'react';
+import { supabase } from './supabaseClient';
+import { LayoutDashboard, Users, History, LockKeyhole, UserCircle } from 'lucide-react';
+import Dashboard from './components/Dashboard';
+import UserList from './components/UserList';
+import DoorLogs from './components/DoorLogs';
+
+const App = () => {
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [status, setStatus] = useState('LOCKED');
+  const [users, setUsers] = useState([]);
+  const [logs, setLogs] = useState([]);
+
+  useEffect(() => {
+    fetchInitialData();
+    const subscription = supabase
+      .channel('schema-db-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'remote_control' }, 
+          payload => setStatus(payload.new.command))
+      .subscribe();
+    return () => supabase.removeChannel(subscription);
+  }, []);
+
+  const fetchInitialData = async () => {
+    const { data: usersData } = await supabase.from('user_credentials').select('*');
+    const { data: logsData } = await supabase.from('door_logs').select('*').order('created_at', { ascending: false }).limit(10);
+    const { data: remote } = await supabase.from('remote_control').select('command').single();
+    if (usersData) setUsers(usersData);
+    if (logsData) setLogs(logsData);
+    if (remote) setStatus(remote.command);
+  };
+
+  const sendCommand = async (cmd) => {
+    const { error } = await supabase
+      .from('remote_control')
+      .update({ command: cmd })
+      .eq('id', 1);
+
+    if (error) {
+      console.error("Error sending command:", error.message);
+    } else {
+      setStatus(cmd);
+    }
+  };
+
+  return (
+    <div className="flex min-h-screen bg-[#F9F8F6] text-[#4A443F] font-sans selection:bg-[#C9B59C] selection:text-white">
+      
+      {/* SIDEBAR DYNAMIS */}
+      <aside className="fixed left-0 top-0 h-screen bg-[#EFE9E3] border-r border-[#D9CFC7] z-50 transition-all duration-500 ease-in-out w-20 hover:w-64 group shadow-sm flex flex-col overflow-hidden">
+        
+        {/* LOGO AREA DENGAN ANIMASI */}
+        <div className="h-24 flex items-center shrink-0 cursor-default relative overflow-hidden">
+          <div className="w-20 flex justify-center items-center shrink-0">
+            {/* Animasi Bounce & Rotate pada Ikon Gembok */}
+            <div className="transition-all duration-700 ease-in-out group-hover:rotate-[360deg] group-hover:scale-125">
+              <LockKeyhole 
+                size={24} 
+                className="text-[#4A443F]" 
+                strokeWidth={2.5} 
+              />
+            </div>
+          </div>
+
+          {/* Animasi Tracking (Letter Spacing) pada Teks */}
+          <span className="text-xl tracking-[0.1em] group-hover:tracking-[0.25em] text-[#4A443F] opacity-0 group-hover:opacity-100 transition-all duration-700 ease-in-out whitespace-nowrap ml-1 font-medium group-hover:font-black">
+            KUNCIIN
+          </span>
+          
+          {/* Efek Garis Bawah Dekoratif yang Muncul saat Hover */}
+          <div className="absolute bottom-6 left-20 right-10 h-[2px] bg-[#4A443F] scale-x-0 group-hover:scale-x-100 transition-transform duration-700 origin-left opacity-20" />
+        </div>
+
+        {/* NAVIGATION */}
+        <nav className="flex-1 space-y-6 py-4">
+          <NavItem 
+            active={activeTab === 'dashboard'} 
+            onClick={() => setActiveTab('dashboard')} 
+            icon={<LayoutDashboard size={22}/>} 
+            label="DASHBOARD" 
+          />
+          <NavItem 
+            active={activeTab === 'users'} 
+            onClick={() => setActiveTab('users')} 
+            icon={<Users size={22}/>} 
+            label="DATABASE" 
+          />
+          <NavItem 
+            active={activeTab === 'logs'} 
+            onClick={() => setActiveTab('logs')} 
+            icon={<History size={22}/>} 
+            label="HISTORY" 
+          />
+        </nav>
+
+        {/* BOTTOM AREA */}
+        <div className="pb-8 border-t border-[#D9CFC7]">
+          <NavItem 
+            active={activeTab === 'account'} 
+            onClick={() => setActiveTab('account')} 
+            icon={<UserCircle size={22}/>} 
+            label="ACCOUNT" 
+          />
+        </div>
+      </aside>
+
+      {/* MAIN CONTENT AREA */}
+      <main className="flex-1 ml-20 p-16 transition-all duration-500">
+        <header className="flex justify-between items-end mb-16">
+          <div>
+            <p className="text-[10px] tracking-[0.4em] text-[#C9B59C] uppercase mb-2 font-bold">IoT Project</p>
+            <h2 className="text-4xl font-light text-[#4A443F] tracking-tight uppercase leading-none">
+              {activeTab}
+            </h2>
+          </div>
+          <div className="flex items-center gap-3 text-[10px] font-bold border border-[#D9CFC7] px-5 py-2 rounded-full text-[#4A443F] bg-white/50">
+            <span className="w-2 h-2 bg-[#C9B59C] rounded-full animate-pulse"></span>
+            NETWORK SECURED
+          </div>
+        </header>
+
+        <div className="max-w-6xl">
+          {activeTab === 'dashboard' && <Dashboard status={status} sendCommand={sendCommand} />}
+          {activeTab === 'users' && <UserList users={users} refreshUsers={fetchInitialData} />}
+          {activeTab === 'logs' && <DoorLogs logs={logs} />}
+        </div>
+      </main>
+    </div>
+  );
+};
+
+const NavItem = ({ active, onClick, icon, label }) => (
+  <button 
+    onClick={onClick} 
+    className={`w-full flex items-center transition-all duration-300 group/item relative h-14 overflow-hidden ${
+      active ? 'text-[#4A443F]' : 'text-[#C9B59C] hover:text-[#4A443F]'
+    }`}
+  >
+    <div className={`relative z-10 w-20 flex justify-center items-center shrink-0 transition-transform duration-300 ${active ? 'scale-115' : 'group-hover/item:scale-110'}`}>
+      {icon}
+      {active && (
+        <div className="absolute left-0 w-1 h-6 bg-[#4A443F] rounded-r-full" />
+      )}
+    </div>
+    
+    <span className={`relative z-10 text-[11px] tracking-[0.2em] whitespace-nowrap transition-all duration-300 ml-1 opacity-0 group-hover:opacity-100 ${
+      active ? 'font-black scale-105' : 'font-medium group-hover/item:font-bold'
+    }`}>
+      {label}
+    </span>
+  </button>
+);
+
+export default App;

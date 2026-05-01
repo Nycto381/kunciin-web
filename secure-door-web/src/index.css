@@ -1,0 +1,10 @@
+@import 'tailwindcss';
+/* Menghaluskan pergerakan konten saat sidebar melebar */
+main {
+  transition: margin-left 0.5s ease-in-out;
+}
+
+/* Memastikan teks di dalam sidebar tidak tumpang tindih saat animasi */
+aside span {
+  transition: opacity 0.3s ease-in-out;
+}
