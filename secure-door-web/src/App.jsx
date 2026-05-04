@@ -13,12 +13,28 @@ const App = () => {
 
   useEffect(() => {
     fetchInitialData();
-    const subscription = supabase
-      .channel('schema-db-changes')
+
+    // Listener 1: Memantau perubahan status remote_control
+    const remoteSubscription = supabase
+      .channel('remote-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'remote_control' }, 
           payload => setStatus(payload.new.command))
       .subscribe();
-    return () => supabase.removeChannel(subscription);
+
+    // Listener 2: Memantau data baru di door_logs secara Real-time
+    const logsSubscription = supabase
+      .channel('logs-changes')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'door_logs' }, 
+          payload => {
+            // Menambahkan data baru ke posisi paling atas (index 0)
+            setLogs(prevLogs => [payload.new, ...prevLogs.slice(0, 9)]);
+          })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(remoteSubscription);
+      supabase.removeChannel(logsSubscription);
+    };
   }, []);
 
   const fetchInitialData = async () => {
@@ -40,6 +56,7 @@ const App = () => {
       console.error("Error sending command:", error.message);
     } else {
       setStatus(cmd);
+      // Opsional: Catat log simulasi di sini jika sedang tidak terhubung Hardware
     }
   };
 
@@ -52,7 +69,6 @@ const App = () => {
         {/* LOGO AREA DENGAN ANIMASI */}
         <div className="h-24 flex items-center shrink-0 cursor-default relative overflow-hidden">
           <div className="w-20 flex justify-center items-center shrink-0">
-            {/* Animasi Bounce & Rotate pada Ikon Gembok */}
             <div className="transition-all duration-700 ease-in-out group-hover:rotate-[360deg] group-hover:scale-125">
               <LockKeyhole 
                 size={24} 
@@ -62,12 +78,10 @@ const App = () => {
             </div>
           </div>
 
-          {/* Animasi Tracking (Letter Spacing) pada Teks */}
           <span className="text-xl tracking-[0.1em] group-hover:tracking-[0.25em] text-[#4A443F] opacity-0 group-hover:opacity-100 transition-all duration-700 ease-in-out whitespace-nowrap ml-1 font-medium group-hover:font-black">
             KUNCIIN
           </span>
           
-          {/* Efek Garis Bawah Dekoratif yang Muncul saat Hover */}
           <div className="absolute bottom-6 left-20 right-10 h-[2px] bg-[#4A443F] scale-x-0 group-hover:scale-x-100 transition-transform duration-700 origin-left opacity-20" />
         </div>
 
