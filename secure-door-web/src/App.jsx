@@ -25,17 +25,17 @@ const App = () => {
     const logsSubscription = supabase
       .channel('logs-changes')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'door_logs' }, 
-          payload => {
-            setLogs(prevLogs => [payload.new, ...prevLogs.slice(0, 9)]);
+          () => {
+            // Panggil ulang fetchInitialData agar data baru langsung digabung dengan nama user
+            fetchInitialData(); 
           })
       .subscribe();
 
-    // TAMBAHKAN INI - Listener 3: Memantau perubahan pada tabel User agar tabel DATABASE Real-time
+    // Listener 3: Memantau perubahan pada tabel User agar tabel DATABASE Real-time
     const userSubscription = supabase
       .channel('user-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'user_credentials' }, 
           () => {
-            // Panggil ulang data user setiap ada perubahan (Insert/Update/Delete)
             fetchUsersOnly(); 
           })
       .subscribe();
@@ -48,16 +48,43 @@ const App = () => {
   }, []);
 
   const fetchInitialData = async () => {
-    const { data: usersData } = await supabase.from('user_credentials').select('*').order('created_at', { ascending: false });
-    const { data: logsData } = await supabase.from('door_logs').select('*').order('created_at', { ascending: false }).limit(10);
-    const { data: remote } = await supabase.from('remote_control').select('command').single();
-    
-    if (usersData) setUsers(usersData);
-    if (logsData) setLogs(logsData);
-    if (remote) setStatus(remote.command);
+    try {
+      // 1. Ambil data user credentials
+      const { data: usersData } = await supabase
+        .from('user_credentials')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      // 2. Ambil data logs secara sederhana
+      const { data: logsData, error: logsError } = await supabase
+        .from('door_logs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (logsError) throw logsError;
+
+      // 3. PROSES PENGGABUNGAN DATA (Manual Join)
+      // Ini memastikan data tidak kosong meskipun relasi di Supabase belum diatur
+      const enrichedLogs = logsData.map(log => {
+        const userData = usersData?.find(u => u.fingerprint_id === log.fingerprint_id);
+        return {
+          ...log,
+          user_credentials: userData ? { name: userData.name } : null
+        };
+      });
+
+      if (usersData) setUsers(usersData);
+      if (enrichedLogs) setLogs(enrichedLogs);
+      
+      const { data: remote } = await supabase.from('remote_control').select('command').single();
+      if (remote) setStatus(remote.command);
+
+    } catch (err) {
+      console.error("Error fetching initial data:", err.message);
+    }
   };
 
-  // Fungsi tambahan untuk update user saja agar lebih ringan
   const fetchUsersOnly = async () => {
     const { data } = await supabase.from('user_credentials').select('*').order('created_at', { ascending: false });
     if (data) setUsers(data);
