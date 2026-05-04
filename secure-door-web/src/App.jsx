@@ -26,24 +26,41 @@ const App = () => {
       .channel('logs-changes')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'door_logs' }, 
           payload => {
-            // Menambahkan data baru ke posisi paling atas (index 0)
             setLogs(prevLogs => [payload.new, ...prevLogs.slice(0, 9)]);
+          })
+      .subscribe();
+
+    // TAMBAHKAN INI - Listener 3: Memantau perubahan pada tabel User agar tabel DATABASE Real-time
+    const userSubscription = supabase
+      .channel('user-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_credentials' }, 
+          () => {
+            // Panggil ulang data user setiap ada perubahan (Insert/Update/Delete)
+            fetchUsersOnly(); 
           })
       .subscribe();
 
     return () => {
       supabase.removeChannel(remoteSubscription);
       supabase.removeChannel(logsSubscription);
+      supabase.removeChannel(userSubscription);
     };
   }, []);
 
   const fetchInitialData = async () => {
-    const { data: usersData } = await supabase.from('user_credentials').select('*');
+    const { data: usersData } = await supabase.from('user_credentials').select('*').order('created_at', { ascending: false });
     const { data: logsData } = await supabase.from('door_logs').select('*').order('created_at', { ascending: false }).limit(10);
     const { data: remote } = await supabase.from('remote_control').select('command').single();
+    
     if (usersData) setUsers(usersData);
     if (logsData) setLogs(logsData);
     if (remote) setStatus(remote.command);
+  };
+
+  // Fungsi tambahan untuk update user saja agar lebih ringan
+  const fetchUsersOnly = async () => {
+    const { data } = await supabase.from('user_credentials').select('*').order('created_at', { ascending: false });
+    if (data) setUsers(data);
   };
 
   const sendCommand = async (cmd) => {
@@ -56,7 +73,6 @@ const App = () => {
       console.error("Error sending command:", error.message);
     } else {
       setStatus(cmd);
-      // Opsional: Catat log simulasi di sini jika sedang tidak terhubung Hardware
     }
   };
 
@@ -65,60 +81,29 @@ const App = () => {
       
       {/* SIDEBAR DYNAMIS */}
       <aside className="fixed left-0 top-0 h-screen bg-[#EFE9E3] border-r border-[#D9CFC7] z-50 transition-all duration-500 ease-in-out w-20 hover:w-64 group shadow-sm flex flex-col overflow-hidden">
-        
-        {/* LOGO AREA DENGAN ANIMASI */}
         <div className="h-24 flex items-center shrink-0 cursor-default relative overflow-hidden">
           <div className="w-20 flex justify-center items-center shrink-0">
             <div className="transition-all duration-700 ease-in-out group-hover:rotate-[360deg] group-hover:scale-125">
-              <LockKeyhole 
-                size={24} 
-                className="text-[#4A443F]" 
-                strokeWidth={2.5} 
-              />
+              <LockKeyhole size={24} className="text-[#4A443F]" strokeWidth={2.5} />
             </div>
           </div>
-
           <span className="text-xl tracking-[0.1em] group-hover:tracking-[0.25em] text-[#4A443F] opacity-0 group-hover:opacity-100 transition-all duration-700 ease-in-out whitespace-nowrap ml-1 font-medium group-hover:font-black">
             KUNCIIN
           </span>
-          
           <div className="absolute bottom-6 left-20 right-10 h-[2px] bg-[#4A443F] scale-x-0 group-hover:scale-x-100 transition-transform duration-700 origin-left opacity-20" />
         </div>
 
-        {/* NAVIGATION */}
         <nav className="flex-1 space-y-6 py-4">
-          <NavItem 
-            active={activeTab === 'dashboard'} 
-            onClick={() => setActiveTab('dashboard')} 
-            icon={<LayoutDashboard size={22}/>} 
-            label="DASHBOARD" 
-          />
-          <NavItem 
-            active={activeTab === 'users'} 
-            onClick={() => setActiveTab('users')} 
-            icon={<Users size={22}/>} 
-            label="DATABASE" 
-          />
-          <NavItem 
-            active={activeTab === 'logs'} 
-            onClick={() => setActiveTab('logs')} 
-            icon={<History size={22}/>} 
-            label="HISTORY" 
-          />
+          <NavItem active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} icon={<LayoutDashboard size={22}/>} label="DASHBOARD" />
+          <NavItem active={activeTab === 'users'} onClick={() => setActiveTab('users')} icon={<Users size={22}/>} label="DATABASE" />
+          <NavItem active={activeTab === 'logs'} onClick={() => setActiveTab('logs')} icon={<History size={22}/>} label="HISTORY" />
         </nav>
 
-        {/* BOTTOM AREA */}
         <div className="pb-8 border-t border-[#D9CFC7]">
-          <NavItem 
-            active={activeTab === 'account'} 
-            onClick={() => setActiveTab('account')} 
-            icon={<UserCircle size={22}/>} 
-            label="ACCOUNT" 
-          />
+          <NavItem active={activeTab === 'account'} onClick={() => setActiveTab('account')} icon={<UserCircle size={22}/>} label="ACCOUNT" />
         </div>
       </aside>
 
-      {/* MAIN CONTENT AREA */}
       <main className="flex-1 ml-20 p-16 transition-all duration-500">
         <header className="flex justify-between items-end mb-16">
           <div>
@@ -152,11 +137,8 @@ const NavItem = ({ active, onClick, icon, label }) => (
   >
     <div className={`relative z-10 w-20 flex justify-center items-center shrink-0 transition-transform duration-300 ${active ? 'scale-115' : 'group-hover/item:scale-110'}`}>
       {icon}
-      {active && (
-        <div className="absolute left-0 w-1 h-6 bg-[#4A443F] rounded-r-full" />
-      )}
+      {active && <div className="absolute left-0 w-1 h-6 bg-[#4A443F] rounded-r-full" />}
     </div>
-    
     <span className={`relative z-10 text-[11px] tracking-[0.2em] whitespace-nowrap transition-all duration-300 ml-1 opacity-0 group-hover:opacity-100 ${
       active ? 'font-black scale-105' : 'font-medium group-hover/item:font-bold'
     }`}>
