@@ -26,7 +26,6 @@ const App = () => {
       .channel('logs-changes')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'door_logs' }, 
           () => {
-            // Panggil ulang fetchInitialData agar data baru langsung digabung dengan nama user
             fetchInitialData(); 
           })
       .subscribe();
@@ -49,13 +48,11 @@ const App = () => {
 
   const fetchInitialData = async () => {
     try {
-      // 1. Ambil data user credentials
       const { data: usersData } = await supabase
         .from('user_credentials')
         .select('*')
         .order('created_at', { ascending: false });
 
-      // 2. Ambil data logs secara sederhana
       const { data: logsData, error: logsError } = await supabase
         .from('door_logs')
         .select('*')
@@ -64,8 +61,6 @@ const App = () => {
 
       if (logsError) throw logsError;
 
-      // 3. PROSES PENGGABUNGAN DATA (Manual Join)
-      // Ini memastikan data tidak kosong meskipun relasi di Supabase belum diatur
       const enrichedLogs = logsData.map(log => {
         const userData = usersData?.find(u => u.fingerprint_id === log.fingerprint_id);
         return {
@@ -106,46 +101,58 @@ const App = () => {
   return (
     <div className="flex min-h-screen bg-[#F9F8F6] text-[#4A443F] font-sans selection:bg-[#C9B59C] selection:text-white">
       
-      {/* SIDEBAR DYNAMIS */}
-      <aside className="fixed left-0 top-0 h-screen bg-[#EFE9E3] border-r border-[#D9CFC7] z-50 transition-all duration-500 ease-in-out w-20 hover:w-64 group shadow-sm flex flex-col overflow-hidden">
-        <div className="h-24 flex items-center shrink-0 cursor-default relative overflow-hidden">
+      {/* SIDEBAR: Desktop (Kiri) & Mobile (Bawah) */}
+      <aside className="fixed bottom-0 left-0 w-full h-20 bg-[#EFE9E3]/90 backdrop-blur-md border-t border-[#D9CFC7] z-[100] 
+                        md:top-0 md:left-0 md:h-screen md:w-20 md:hover:w-64 md:border-r md:border-t-0 md:bg-[#EFE9E3] 
+                        flex flex-row md:flex-col transition-all duration-500 ease-in-out shadow-[0_-4px_20px_rgba(0,0,0,0.05)] md:shadow-none overflow-hidden">
+        
+        {/* Logo Section - Hanya muncul di Desktop */}
+        <div className="hidden md:flex h-24 items-center shrink-0 cursor-default relative overflow-hidden">
           <div className="w-20 flex justify-center items-center shrink-0">
             <div className="transition-all duration-700 ease-in-out group-hover:rotate-[360deg] group-hover:scale-125">
               <LockKeyhole size={24} className="text-[#4A443F]" strokeWidth={2.5} />
             </div>
           </div>
-          <span className="text-xl tracking-[0.1em] group-hover:tracking-[0.25em] text-[#4A443F] opacity-0 group-hover:opacity-100 transition-all duration-700 ease-in-out whitespace-nowrap ml-1 font-medium group-hover:font-black">
-            KUNCIIN
-          </span>
-          <div className="absolute bottom-6 left-20 right-10 h-[2px] bg-[#4A443F] scale-x-0 group-hover:scale-x-100 transition-transform duration-700 origin-left opacity-20" />
+          <span className="text-xl tracking-[0.1em] font-medium ml-1">KUNCIIN</span>
         </div>
 
-        <nav className="flex-1 space-y-6 py-4">
+        {/* Navigation Items */}
+        <nav className="flex flex-row md:flex-col flex-1 items-center justify-around md:justify-start md:py-4 md:space-y-6 w-full">
           <NavItem active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} icon={<LayoutDashboard size={22}/>} label="DASHBOARD" />
           <NavItem active={activeTab === 'users'} onClick={() => setActiveTab('users')} icon={<Users size={22}/>} label="DATABASE" />
           <NavItem active={activeTab === 'logs'} onClick={() => setActiveTab('logs')} icon={<History size={22}/>} label="HISTORY" />
+          {/* Mobile version of Account */}
+          <div className="md:hidden">
+            <NavItem active={activeTab === 'account'} onClick={() => setActiveTab('account')} icon={<UserCircle size={22}/>} label="ACCOUNT" />
+          </div>
         </nav>
 
-        <div className="pb-8 border-t border-[#D9CFC7]">
+        {/* Account Section - Hanya muncul di Desktop */}
+        <div className="hidden md:block pb-8 border-t border-[#D9CFC7]">
           <NavItem active={activeTab === 'account'} onClick={() => setActiveTab('account')} icon={<UserCircle size={22}/>} label="ACCOUNT" />
         </div>
       </aside>
 
-      <main className="flex-1 ml-20 p-16 transition-all duration-500">
-        <header className="flex justify-between items-end mb-16">
-          <div>
-            <p className="text-[10px] tracking-[0.4em] text-[#C9B59C] uppercase mb-2 font-bold">IoT Project</p>
-            <h2 className="text-4xl font-light text-[#4A443F] tracking-tight uppercase leading-none">
+      {/* MAIN CONTENT Area */}
+      <main className="flex-1 transition-all duration-500 
+                       ml-0 md:ml-20 
+                       p-6 md:p-16 
+                       pb-32 md:pb-16"> 
+        
+        <header className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 md:mb-16 gap-4">
+          <div className="space-y-1">
+            <p className="text-[10px] tracking-[0.4em] text-[#C9B59C] uppercase font-bold">IoT Project</p>
+            <h2 className="text-3xl md:text-4xl font-light text-[#4A443F] tracking-tight uppercase leading-none">
               {activeTab}
             </h2>
           </div>
-          <div className="flex items-center gap-3 text-[10px] font-bold border border-[#D9CFC7] px-5 py-2 rounded-full text-[#4A443F] bg-white/50">
+          <div className="flex items-center gap-3 text-[9px] font-bold border border-[#D9CFC7] px-4 py-2 rounded-full text-[#4A443F] bg-white/50 backdrop-blur-sm self-end md:self-auto">
             <span className="w-2 h-2 bg-[#C9B59C] rounded-full animate-pulse"></span>
             NETWORK SECURED
           </div>
         </header>
 
-        <div className="max-w-6xl">
+        <div className="max-w-6xl mx-auto">
           {activeTab === 'dashboard' && <Dashboard status={status} sendCommand={sendCommand} />}
           {activeTab === 'users' && <UserList users={users} refreshUsers={fetchInitialData} />}
           {activeTab === 'logs' && <DoorLogs logs={logs} />}
@@ -158,17 +165,27 @@ const App = () => {
 const NavItem = ({ active, onClick, icon, label }) => (
   <button 
     onClick={onClick} 
-    className={`w-full flex items-center transition-all duration-300 group/item relative h-14 overflow-hidden ${
-      active ? 'text-[#4A443F]' : 'text-[#C9B59C] hover:text-[#4A443F]'
-    }`}
+    className={`flex flex-col md:flex-row items-center justify-center md:justify-start transition-all duration-300 relative 
+                w-full h-full md:h-14 
+                ${active ? 'text-[#4A443F]' : 'text-[#C9B59C] hover:text-[#4A443F]'}`}
   >
-    <div className={`relative z-10 w-20 flex justify-center items-center shrink-0 transition-transform duration-300 ${active ? 'scale-115' : 'group-hover/item:scale-110'}`}>
+    {/* Icon Container */}
+    <div className={`relative z-10 md:w-20 flex justify-center items-center shrink-0 transition-transform duration-300 
+                    ${active ? 'scale-110 md:scale-115' : 'hover:scale-110'}`}>
       {icon}
-      {active && <div className="absolute left-0 w-1 h-6 bg-[#4A443F] rounded-r-full" />}
+      {/* Active Indicator: Desktop (Side), Mobile (Top) */}
+      {active && (
+        <>
+          <div className="hidden md:block absolute left-0 w-1 h-6 bg-[#4A443F] rounded-r-full" />
+          <div className="md:hidden absolute -top-4 w-8 h-1 bg-[#4A443F] rounded-b-full shadow-[0_2px_10px_rgba(74,68,63,0.3)]" />
+        </>
+      )}
     </div>
-    <span className={`relative z-10 text-[11px] tracking-[0.2em] whitespace-nowrap transition-all duration-300 ml-1 opacity-0 group-hover:opacity-100 ${
-      active ? 'font-black scale-105' : 'font-medium group-hover/item:font-bold'
-    }`}>
+
+    {/* Label */}
+    <span className={`text-[9px] md:text-[11px] tracking-[0.1em] md:tracking-[0.2em] whitespace-nowrap transition-all duration-300 
+                      mt-1 md:mt-0 md:ml-1 md:opacity-0 md:group-hover:opacity-100 
+                      ${active ? 'font-black' : 'font-medium'}`}>
       {label}
     </span>
   </button>
